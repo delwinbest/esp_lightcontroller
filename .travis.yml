@@ -39,4 +39,5 @@ install:
     - sudo platformio lib install 44
 
 script:
-    - platformio ci --lib="." --board=d1_mini
+    - ls -la
+    - platformio ci --lib="." --board=nodemcuv2
