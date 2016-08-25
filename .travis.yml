@@ -33,7 +33,7 @@ cache:
 
 env:
     - PLATFORMIO_CI_SRC=src/main.cpp
-
+    - CPPLINT=true
 
 install:
     - pip install -U platformio
