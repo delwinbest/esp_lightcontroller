@@ -29,6 +29,8 @@ int ledControl(String command);
 
 
 // Either connect to AP or become AP
+// This section allows you to either connect to a WiFi AP or
+// become a WiFi AP (great for testing)
 void config_AP () {
   if (is_AP){
     // WiFi parameters
@@ -77,7 +79,7 @@ void setup(void)
 }
 
 void loop(){
-  // Handle REST calls
+  // Handle aREST calls
   WiFiClient client = server.available();
   if (!client) {
     return;
@@ -90,7 +92,7 @@ void loop(){
       client.stop();
     } // if (client.available())
   } // while (client.connected())
-}
+} // void loop()
 
 
 
