@@ -40,4 +40,4 @@ install:
 
 script:
     - ls -la
-    - platformio ci --lib="." --board=nodemcuv2
+    - platformio ci --lib="lib/" --board=nodemcuv2
