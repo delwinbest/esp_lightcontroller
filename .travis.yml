@@ -41,4 +41,4 @@ install:
 script:
     - pwd
     - ls -la
-    - platformio ci --lib="./lib" --board=nodemcuv2
+    - platformio ci  src --project-conf platformio.ini --lib lib  --board=nodemcuv2
