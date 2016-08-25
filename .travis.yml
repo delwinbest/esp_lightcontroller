@@ -39,5 +39,6 @@ install:
     - sudo platformio lib install 44
 
 script:
+    - pwd
     - ls -la
-    - platformio ci --lib="lib/" --board=nodemcuv2
+    - platformio ci --lib="~/lib" --board=nodemcuv2
