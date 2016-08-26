@@ -122,7 +122,7 @@ void config_AP () {
   } else {
     // Connect to AP/ WiFi parameters
     char* ssid = "arduinowifi";
-    char* password = "password";
+    char* password = "thereisnospoon";
     Serial.print("Connecting to ");
     Serial.println(ssid);
     WiFi.begin(ssid, password);
