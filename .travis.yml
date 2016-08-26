@@ -35,8 +35,8 @@ env:
     - PLATFORMIO_PROJECT_DIR=.
 
 install:
-  - sudo pip install -U https://github.com/platformio/platformio/archive/develop.zip
-  - sudo platformio platform install file://.
+    - sudo pip install -U platformio
+    - sudo platformio lib install 44
 
 script:
     - pwd
