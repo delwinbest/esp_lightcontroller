@@ -41,7 +41,7 @@ install:
   - git clone https://github.com/FastLED/FastLED /usr/local/share/arduino/libraries/FastLED 
   - arduino --install-boards esp8266:esp8266
   - arduino --board esp8266:esp8266:d1_mini --save-prefs
-  - arduino --pref "compiler.warning_level=all" --save-prefs
+#  - arduino --pref "compiler.warning_level=error" --save-prefs
 
 script:
   - "echo $PWD"
