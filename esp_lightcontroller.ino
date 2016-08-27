@@ -10,7 +10,7 @@
 // Import required libraries
 #include <ESP8266WiFi.h>
 #include <aREST.h>
-#include "FastLED.h"
+
 
 
 // Create aREST instance
@@ -20,14 +20,11 @@ bool is_AP = false;
 
 // The port to listen for incoming TCP connections
 #define LISTEN_PORT           80
-#define LED_DATA_PIN 3
-// How many leds in your strip?
-#define NUM_LEDS 1
+
 
 // Create an instance of the server
 WiFiServer server(LISTEN_PORT);
-// Define the array of leds
-CRGB leds[NUM_LEDS];
+
 
 // Variables to be exposed to the API
 int temperature;
@@ -50,7 +47,6 @@ void setup(void)
   temperature = 24;
   humidity = 40;
 
-  FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);
   
   rest.variable("temperature",&temperature);
   rest.variable("humidity",&humidity);
@@ -70,9 +66,8 @@ void setup(void)
 }
 
 void loop(){
-  
-  leds[0] = CRGB::Red;
-  FastLED.show();
+
+
   
   // Handle aREST calls
   WiFiClient client = server.available();
@@ -118,8 +113,9 @@ void config_AP () {
     // Print the IP address
     IPAddress myIP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
-    Serial.println(myIP);
+    Serial.println(myIP); 
   } else {
+    WiFi.softAPdisconnect();
     // Connect to AP/ WiFi parameters
     char* ssid = "arduinowifi";
     char* password = "thereisnospoon";
