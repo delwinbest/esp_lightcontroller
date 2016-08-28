@@ -10,12 +10,12 @@
 // Import required libraries
 #include <ESP8266WiFi.h>
 #include <aREST.h>
-
+#include <Adafruit_NeoPixel.h>
 
 
 // Create aREST instance
 aREST rest = aREST();
-bool is_AP = false;
+bool is_AP = true;
 
 
 // The port to listen for incoming TCP connections
@@ -24,7 +24,11 @@ bool is_AP = false;
 
 // Create an instance of the server
 WiFiServer server(LISTEN_PORT);
-
+#define LED_PIN D2
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS 1
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, LED_PIN, NEO_GRB + NEO_KHZ800);
+ 
 
 // Variables to be exposed to the API
 int temperature;
@@ -62,7 +66,10 @@ void setup(void)
   // Start the server
   server.begin();
   Serial.println("Server started");
-
+  pixels.begin();
+  pixels.setPixelColor(0, pixels.Color(0,125,0));
+  pixels.setPixelColor(1, pixels.Color(125,0,0));
+  pixels.show();
 }
 
 void loop(){
