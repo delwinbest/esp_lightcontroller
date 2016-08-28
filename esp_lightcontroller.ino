@@ -16,6 +16,7 @@
 // Create aREST instance
 aREST rest = aREST();
 bool is_AP = true;
+bool led_rainbow=true;
 
 
 // The port to listen for incoming TCP connections
@@ -26,16 +27,18 @@ bool is_AP = true;
 WiFiServer server(LISTEN_PORT);
 #define LED_PIN D2
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS 1
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, LED_PIN, NEO_GRB + NEO_KHZ800);
+#define NUMPIXELS 2
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(2, LED_PIN, NEO_GRB + NEO_KHZ800);
  
 
 // Variables to be exposed to the API
 int temperature;
 int humidity;
+uint16_t j=0;
 
 // Declare functions to be exposed to the API
-int ledControl(String command);
+int ledControl(String value);
+int rainbowControl(String value);
 
 void config_AP ();
 
@@ -57,6 +60,7 @@ void setup(void)
 
   // Function to be exposed
   rest.function("led",ledControl);
+  rest.function("rainbow",rainbowControl);
 
   // Give name & ID to the device (ID should be 6 characters long)
   rest.set_id("1");
@@ -67,14 +71,15 @@ void setup(void)
   server.begin();
   Serial.println("Server started");
   pixels.begin();
-  pixels.setPixelColor(0, pixels.Color(0,125,0));
-  pixels.setPixelColor(1, pixels.Color(125,0,0));
+
+  pixels.setBrightness(20);
   pixels.show();
 }
 
 void loop(){
-
-
+  if(led_rainbow==true){
+    rainbow(20);
+  }
   
   // Handle aREST calls
   WiFiClient client = server.available();
@@ -89,17 +94,35 @@ void loop(){
       client.stop();
     } // if (client.available())
   } // while (client.connected())
+
+
+  
 } // void loop()
 
 
 
 // Custom function accessible by the API
-int ledControl(String command) {
-
+int ledControl(String value) {
+  Serial.print("Setting Brightness to ");
+  Serial.println(value);
+  //uint8_t brightness = value.toInt();
   // Get state from command
-  int state = command.toInt();
+  // pixels.setBrightness(brightness);
+  //pixels.setPixelColor(0, 127,127,127);
+  //Serial.println("Setting LED to white");
+  //pixels.show();
+  return 1;
+}
 
-  digitalWrite(6,state);
+// Custom function accessible by the API
+int rainbowControl(String value) {
+  if (value == "true"){
+    Serial.println("rainbow is now true");
+    led_rainbow=true;
+  }else {
+    Serial.println("rainbow is now false");
+    led_rainbow=false;
+  }
   return 1;
 }
 
@@ -140,5 +163,42 @@ void config_AP () {
     Serial.println(WiFi.localIP());
   }
 }
+
+
+
+void rainbow(uint8_t wait) {
+  uint16_t i;
+  
+  for(i=0; i<pixels.numPixels(); i++) {
+    pixels.setPixelColor(i, Wheel((i+j) & 255));
+  }
+  pixels.show();
+  //Serial.print(".");
+  delay(wait);
+  j++;
+  if (j==255){ j=0;}
+
+}
+
+
+// We need to create a fader, 3 colors, 0 - 255 per color, the spectrum looks like this:
+// 0......125 .......255
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+    return pixels.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if(WheelPos < 170) {
+    WheelPos -= 85;
+    return pixels.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return pixels.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+}
+
+
+
 
 
