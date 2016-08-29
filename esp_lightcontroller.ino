@@ -1,16 +1,14 @@
-#include <Arduino.h>
-
 /*
-  This a simple example of the aREST Library for the ESP8266 WiFi chip.
-  See the README file for more details.
+  Highly adapted NEOPIXEL controller using aREST library.
 
-  Written in 2015 by Marco Schwartz under a GPL license.
+  Written in 2016 by Delwin Best
 */
 
 // Import required libraries
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <aREST.h>
-#include <Adafruit_NeoPixel.h>
+#include <aREST.h>              //https://github.com/marcoschwartz/aREST
+#include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
 
 
 // Create aREST instance
@@ -29,7 +27,7 @@ WiFiServer server(LISTEN_PORT);
 // How many NeoPixels are attached to the Arduino?
 #define NUMPIXELS 2
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(2, LED_PIN, NEO_GRB + NEO_KHZ800);
- 
+
 
 // Variables to be exposed to the API
 int temperature;
@@ -37,7 +35,7 @@ int humidity;
 uint16_t j=0;
 
 // Declare functions to be exposed to the API
-int ledControl(String value);
+int ledBrightness(String value);
 int rainbowControl(String value);
 
 void config_AP ();
@@ -54,12 +52,12 @@ void setup(void)
   temperature = 24;
   humidity = 40;
 
-  
+
   rest.variable("temperature",&temperature);
   rest.variable("humidity",&humidity);
 
   // Function to be exposed
-  rest.function("led",ledControl);
+  rest.function("brightness",ledBrightness);
   rest.function("rainbow",rainbowControl);
 
   // Give name & ID to the device (ID should be 6 characters long)
@@ -80,7 +78,7 @@ void loop(){
   if(led_rainbow==true){
     rainbow(20);
   }
-  
+
   // Handle aREST calls
   WiFiClient client = server.available();
   if (!client) {
@@ -96,31 +94,31 @@ void loop(){
   } // while (client.connected())
 
 
-  
+
 } // void loop()
 
 
 
 // Custom function accessible by the API
-int ledControl(String value) {
+int ledBrightness(String value) {
   Serial.print("Setting Brightness to ");
   Serial.println(value);
-  //uint8_t brightness = value.toInt();
-  // Get state from command
-  // pixels.setBrightness(brightness);
+  uint8_t brightness = value.toInt();
+  // Set Brightness to param value
+  // Command: /led?params=20
+  pixels.setBrightness(brightness);
   //pixels.setPixelColor(0, 127,127,127);
   //Serial.println("Setting LED to white");
-  //pixels.show();
+  pixels.show();
   return 1;
 }
 
 // Custom function accessible by the API
+// /rainbow?params=true
 int rainbowControl(String value) {
   if (value == "true"){
-    Serial.println("rainbow is now true");
     led_rainbow=true;
   }else {
-    Serial.println("rainbow is now false");
     led_rainbow=false;
   }
   return 1;
@@ -143,7 +141,7 @@ void config_AP () {
     // Print the IP address
     IPAddress myIP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
-    Serial.println(myIP); 
+    Serial.println(myIP);
   } else {
     WiFi.softAPdisconnect();
     // Connect to AP/ WiFi parameters
@@ -168,7 +166,7 @@ void config_AP () {
 
 void rainbow(uint8_t wait) {
   uint16_t i;
-  
+
   for(i=0; i<pixels.numPixels(); i++) {
     pixels.setPixelColor(i, Wheel((i+j) & 255));
   }
@@ -197,8 +195,3 @@ uint32_t Wheel(byte WheelPos) {
   WheelPos -= 170;
   return pixels.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
-
-
-
-
-
