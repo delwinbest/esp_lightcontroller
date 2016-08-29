@@ -1,40 +1,42 @@
-#include <Arduino.h>
-
 /*
-  This a simple example of the aREST Library for the ESP8266 WiFi chip.
-  See the README file for more details.
+  Highly adapted NEOPIXEL controller using aREST library.
 
-  Written in 2015 by Marco Schwartz under a GPL license.
+  Written in 2016 by Delwin Best
 */
 
 // Import required libraries
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <aREST.h>
-#include "FastLED.h"
+#include <aREST.h>              //https://github.com/marcoschwartz/aREST
+#include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
 
 
 // Create aREST instance
 aREST rest = aREST();
-bool is_AP = false;
+bool is_AP = true;
+bool led_rainbow=true;
 
 
 // The port to listen for incoming TCP connections
 #define LISTEN_PORT           80
-#define LED_DATA_PIN 3
-// How many leds in your strip?
-#define NUM_LEDS 1
+
 
 // Create an instance of the server
 WiFiServer server(LISTEN_PORT);
-// Define the array of leds
-CRGB leds[NUM_LEDS];
+#define LED_PIN D2
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS 2
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(2, LED_PIN, NEO_GRB + NEO_KHZ800);
+
 
 // Variables to be exposed to the API
 int temperature;
 int humidity;
+uint16_t j=0;
 
 // Declare functions to be exposed to the API
-int ledControl(String command);
+int ledBrightness(String value);
+int rainbowControl(String value);
 
 void config_AP ();
 
@@ -50,13 +52,13 @@ void setup(void)
   temperature = 24;
   humidity = 40;
 
-  FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);
-  
+
   rest.variable("temperature",&temperature);
   rest.variable("humidity",&humidity);
 
   // Function to be exposed
-  rest.function("led",ledControl);
+  rest.function("brightness",ledBrightness);
+  rest.function("rainbow",rainbowControl);
 
   // Give name & ID to the device (ID should be 6 characters long)
   rest.set_id("1");
@@ -66,14 +68,17 @@ void setup(void)
   // Start the server
   server.begin();
   Serial.println("Server started");
+  pixels.begin();
 
+  pixels.setBrightness(20);
+  pixels.show();
 }
 
 void loop(){
-  
-  leds[0] = CRGB::Red;
-  FastLED.show();
-  
+  if(led_rainbow==true){
+    rainbow(20);
+  }
+
   // Handle aREST calls
   WiFiClient client = server.available();
   if (!client) {
@@ -87,17 +92,35 @@ void loop(){
       client.stop();
     } // if (client.available())
   } // while (client.connected())
+
+
+
 } // void loop()
 
 
 
 // Custom function accessible by the API
-int ledControl(String command) {
+int ledBrightness(String value) {
+  Serial.print("Setting Brightness to ");
+  Serial.println(value);
+  uint8_t brightness = value.toInt();
+  // Set Brightness to param value
+  // Command: /led?params=20
+  pixels.setBrightness(brightness);
+  //pixels.setPixelColor(0, 127,127,127);
+  //Serial.println("Setting LED to white");
+  pixels.show();
+  return 1;
+}
 
-  // Get state from command
-  int state = command.toInt();
-
-  digitalWrite(6,state);
+// Custom function accessible by the API
+// /rainbow?params=true
+int rainbowControl(String value) {
+  if (value == "true"){
+    led_rainbow=true;
+  }else {
+    led_rainbow=false;
+  }
   return 1;
 }
 
@@ -120,6 +143,7 @@ void config_AP () {
     Serial.print("AP IP address: ");
     Serial.println(myIP);
   } else {
+    WiFi.softAPdisconnect();
     // Connect to AP/ WiFi parameters
     char* ssid = "arduinowifi";
     char* password = "thereisnospoon";
@@ -139,3 +163,35 @@ void config_AP () {
 }
 
 
+
+void rainbow(uint8_t wait) {
+  uint16_t i;
+
+  for(i=0; i<pixels.numPixels(); i++) {
+    pixels.setPixelColor(i, Wheel((i+j) & 255));
+  }
+  pixels.show();
+  //Serial.print(".");
+  delay(wait);
+  j++;
+  if (j==255){ j=0;}
+
+}
+
+
+// We need to create a fader, 3 colors, 0 - 255 per color, the spectrum looks like this:
+// 0......125 .......255
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+    return pixels.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if(WheelPos < 170) {
+    WheelPos -= 85;
+    return pixels.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return pixels.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+}

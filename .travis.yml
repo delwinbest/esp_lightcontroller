@@ -36,9 +36,9 @@ install:
   - arduino --pref "boardsmanager.additional.urls=http://arduino.esp8266.com/stable/package_esp8266com_index.json" --save-prefs
 # install lib arduino json not working in 1.6.5
 #  - arduino --install-library "ArduinoJson"
-  - git clone https://github.com/marcoschwartz/aREST /usr/local/share/arduino/libraries/aREST 
+  - git clone https://github.com/marcoschwartz/aREST /usr/local/share/arduino/libraries/aREST
   - git clone https://github.com/esp8266/Arduino /usr/local/share/arduino/libraries/esp8266
-  - git clone https://github.com/FastLED/FastLED /usr/local/share/arduino/libraries/FastLED 
+  - git clone https://github.com/adafruit/Adafruit_NeoPixel /usr/local/share/arduino/libraries/Adafruit_NeoPixel
   - arduino --install-boards esp8266:esp8266
   - arduino --board esp8266:esp8266:d1_mini --save-prefs
 #  - arduino --pref "compiler.warning_level=error" --save-prefs

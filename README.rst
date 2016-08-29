@@ -1,7 +1,7 @@
 ESP8266 Open Source Lighting Controller
 ==========
 .. image:: https://travis-ci.org/delwinbest/esp_lightcontroller.svg?branch=master
-    :target: https://travis-ci.org/pdelwinbest/esp_lightcontroller
+    :target: https://travis-ci.org/delwinbest/esp_lightcontroller
     :alt: Travis.CI Build Status
 
 Another home automation project using $4 ESP8266 device with Platformio compiler and HTTP aREST interface.
