@@ -9,7 +9,7 @@
 #include <ESP8266WiFi.h>
 #include <aREST.h>              //https://github.com/marcoschwartz/aREST
 #include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
-
+#include <stdlib.h>
 
 // Create aREST instance
 aREST rest = aREST();
@@ -37,6 +37,7 @@ uint16_t j=0;
 // Declare functions to be exposed to the API
 int ledBrightness(String value);
 int rainbowControl(String value);
+int setColor(String value);
 
 void config_AP ();
 
@@ -59,6 +60,7 @@ void setup(void)
   // Function to be exposed
   rest.function("brightness",ledBrightness);
   rest.function("rainbow",rainbowControl);
+  rest.function("setcolor",setColor);
 
   // Give name & ID to the device (ID should be 6 characters long)
   rest.set_id("1");
@@ -90,6 +92,7 @@ void loop(){
     if (client.available()) {
       rest.handle(client);
       client.stop();
+      delay(500); // trying to address debounce
     } // if (client.available())
   } // while (client.connected())
 
@@ -101,14 +104,12 @@ void loop(){
 
 // Custom function accessible by the API
 int ledBrightness(String value) {
-  Serial.print("Setting Brightness to ");
-  Serial.println(value);
+  //Serial.print("Setting Brightness to ");
+  //Serial.println(value);
   uint8_t brightness = value.toInt();
   // Set Brightness to param value
-  // Command: /led?params=20
+  // Command: /brightness?params=20
   pixels.setBrightness(brightness);
-  //pixels.setPixelColor(0, 127,127,127);
-  //Serial.println("Setting LED to white");
   pixels.show();
   return 1;
 }
@@ -121,6 +122,26 @@ int rainbowControl(String value) {
   }else {
     led_rainbow=false;
   }
+  return 1;
+}
+
+// Convert HTML color code into RGB values
+// and set strip
+int setColor(String value) {
+  led_rainbow = false;
+
+  long number = (long) strtol( &value[0], NULL, 16);
+  int red = number >> 16;
+  int green = number >> 8 & 0xFF;
+  int blue = number & 0xFF;
+  uint16_t i;
+
+
+  for(i=0; i<pixels.numPixels(); i++) {
+    pixels.setPixelColor(i, red, green, blue);
+  }
+
+  pixels.show();
   return 1;
 }
 
