@@ -1,218 +1,171 @@
-/*
-  Highly adapted NEOPIXEL controller using aREST library.
-
-  Written in 2016 by Delwin Best
-*/
-
-// Import required libraries
-#include <Arduino.h>
-#include <ESP8266WiFi.h>
-#include <aREST.h>              //https://github.com/marcoschwartz/aREST
+#include <EEPROM.h>
+#include <SPI.h>
 #include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
-#include <stdlib.h>
 
-// Create aREST instance
-aREST rest = aREST();
-bool is_AP = true;
-bool led_rainbow=true;
+#define MY_DEBUG 
+#define MY_BAUD_RATE 9600
 
-
-// The port to listen for incoming TCP connections
-#define LISTEN_PORT           80
+// Enables and select radio type (if attached)
 
 
-// Create an instance of the server
-WiFiServer server(LISTEN_PORT);
-#define LED_PIN D2
-// How many NeoPixels are attached to the Arduino?
+#define MY_GATEWAY_ESP8266
+#define MY_ESP8266_SSID "arduinowifi"
+#define MY_ESP8266_PASSWORD "thereisnospoon"
+
+#define MY_ESP8266_HOSTNAME "esp8266_bedroom"
+
+#define MY_IP_GATEWAY_ADDRESS 192,168,1,1
+#define MY_IP_SUBNET_ADDRESS 255,255,255,0
+#define MY_PORT 5003      
+
+#define MY_GATEWAY_MAX_CLIENTS 3
+
+
+#define MY_INCLUSION_MODE_FEATURE
+#define MY_INCLUSION_MODE_DURATION 60 
+#define MY_INCLUSION_MODE_BUTTON_PIN  3 
+
+#define MY_DEFAULT_ERR_LED_PIN BUILTIN_LED  // Error led 
+#define MY_DEFAULT_RX_LED_PIN  BUILTIN_LED  // Receive led pin
+#define MY_DEFAULT_TX_LED_PIN  BUILTIN_LED  // the PCB, on board LED
 #define NUMPIXELS 2
+#define LED_PIN D2
+
+
+#if defined(MY_USE_UDP)
+  #include <WiFiUDP.h>
+#else
+  #include <ESP8266WiFi.h>
+#endif
+
+
+
+
+#define CHILD1_ID 1 
+#define EPROM_CHILD1_STATE 1
+#define EPROM_CHILD1_DIMLEVEL 2
+#define EPROM_CHILD1_COLOR 3
+
+#define LIGHT_OFF 0
+#define LIGHT_ON 1
+
+#include <MySensors.h>
+
+int LastLightState=LIGHT_OFF;
+int LastDimValue=100; 
+
+MyMessage rgbMsg(CHILD1_ID, V_RGB);
+MyMessage dimMsg(CHILD1_ID+1, V_PERCENTAGE);
+
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(2, LED_PIN, NEO_GRB + NEO_KHZ800);
-
-
-// Variables to be exposed to the API
-int temperature;
-int humidity;
-uint16_t j=0;
-
-// Declare functions to be exposed to the API
-int ledBrightness(String value);
-int rainbowControl(String value);
-int setColor(String value);
-
-void config_AP ();
-
-
-
-void setup(void)
-{
-  // Start Serial
+  
+void setup() {
+  
   delay(1000);
-  Serial.begin(115200);
-
-  // Init variables and expose them to REST API
-  temperature = 24;
-  humidity = 40;
-
-
-  rest.variable("temperature",&temperature);
-  rest.variable("humidity",&humidity);
-
-  // Function to be exposed
-  rest.function("brightness",ledBrightness);
-  rest.function("rainbow",rainbowControl);
-  rest.function("setcolor",setColor);
-
-  // Give name & ID to the device (ID should be 6 characters long)
-  rest.set_id("1");
-  rest.set_name("esp8266");
-  config_AP();
-
-  // Start the server
-  server.begin();
-  Serial.println("Server started");
+  Serial.begin(9600);
   pixels.begin();
 
-  pixels.setBrightness(20);
-  pixels.show();
+  request( CHILD1_ID, V_RGB );
+  request( CHILD1_ID+1, V_PERCENTAGE );
+
 }
 
-void loop(){
-  if(led_rainbow==true){
-    rainbow(20);
+void presentation() {
+  // Present locally attached sensors here
+  present(0, S_ARDUINO_REPEATER_NODE, "ESP8266_lightcontroller", true); //The number 18 signifies S_ARDUINO_REPEATER_NODE
+  present(CHILD1_ID, S_RGB_LIGHT, "RGB", true );
+  present(CHILD1_ID+1, S_DIMMER, "RGB", true );
+  sendSketchInfo("esp8266_lighting", "1.0");
+  typedef enum {
+    S_RGB_LIGHT, S_DIMMER
+  } sensor;
+  typedef enum {
+    V_RGB, V_PERCENTAGE, V_WATT
+  } variableType;
+  sleep(100);  
+}
+
+
+void loop() {
+
+
+}
+
+void receive(const MyMessage &message)
+{
+
+  //Send msg infoprmation
+  Serial.print("node-id: ");Serial.println(message.sender);
+  Serial.print("destination-id: ");Serial.println(message.destination);
+  Serial.print("child-sensor-id: ");Serial.println(message.sensor);
+  Serial.print("message-type: ");Serial.println(message.type);
+  Serial.print("data: ");Serial.println(message.data);
+
+  if ((message.sensor == CHILD1_ID) || (message.sensor == CHILD1_ID+1)){
+  
+    if (message.type == V_RGB) {
+      Serial.println( "V_RGB command received..." );
+      setColor(message.data);
+    }
+    if (message.type == V_PERCENTAGE) {
+      Serial.println( "V_PERCENTAGE command received..." );
+      ledBrightness(message.data);
+    }
+    if (message.type == V_LIGHT) {
+      Serial.println( "V_LIGHT command received..." );
+      ledBrightness(message.data);
+    }
   }
 
-  // Handle aREST calls
-  WiFiClient client = server.available();
-  if (!client) {
-    return;
+}
+
+
+
+void SendCurrentState2Controller()
+{
+  if ((LastLightState==LIGHT_OFF)||(LastDimValue==0)) {
+    send(rgbMsg.set(0));
   }
-  Serial.println("Client Connected. Waiting for Data:");
-
-  while (client.connected()) {
-    if (client.available()) {
-      rest.handle(client);
-      client.stop();
-      delay(500); // trying to address debounce
-    } // if (client.available())
-  } // while (client.connected())
+  else {
+    send(rgbMsg.set("ffffff"));
+  }
+}
 
 
 
-} // void loop()
-
-
-
-// Custom function accessible by the API
+// Custom function to set Brightness
 int ledBrightness(String value) {
-  //Serial.print("Setting Brightness to ");
-  //Serial.println(value);
+  Serial.print("Setting Brightness to ");
+  Serial.println(value);
   uint8_t brightness = value.toInt();
   // Set Brightness to param value
-  // Command: /brightness?params=20
-  pixels.setBrightness(brightness);
-  pixels.show();
-  return 1;
-}
-
-// Custom function accessible by the API
-// /rainbow?params=true
-int rainbowControl(String value) {
-  if (value == "true"){
-    led_rainbow=true;
-  }else {
-    led_rainbow=false;
+  if (brightness == 0){
+    setColor("0");
+  } else if (brightness == 1 ){
+    setColor("FFFFFF");
+  } else {
+    pixels.setBrightness(brightness);
+    pixels.show();
   }
-  return 1;
 }
 
 // Convert HTML color code into RGB values
 // and set strip
 int setColor(String value) {
-  led_rainbow = false;
-
+  Serial.print("Setting Color To: ");
+  Serial.println(value);
   long number = (long) strtol( &value[0], NULL, 16);
   int red = number >> 16;
   int green = number >> 8 & 0xFF;
   int blue = number & 0xFF;
   uint16_t i;
 
-
   for(i=0; i<pixels.numPixels(); i++) {
     pixels.setPixelColor(i, red, green, blue);
   }
-
   pixels.show();
-  return 1;
-}
-
-// Either connect to AP or become AP
-// This section allows you to either connect to a WiFi AP or
-// become a WiFi AP (great for testing)
-void config_AP () {
-  Serial.println("");
-  delay(50);
-  if (is_AP==true){
-    // WiFi parameters
-    char* ssid = "esp8266AP";
-    char* password = "thereisnospoon";
-    // Setup WiFi network
-    WiFi.softAP(ssid, password);
-    Serial.println("WiFi created");
-
-    // Print the IP address
-    IPAddress myIP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(myIP);
-  } else {
-    WiFi.softAPdisconnect();
-    // Connect to AP/ WiFi parameters
-    char* ssid = "arduinowifi";
-    char* password = "thereisnospoon";
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-    Serial.print(".");
-    }
-
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-  }
-}
-
-
-
-void rainbow(uint8_t wait) {
-  uint16_t i;
-
-  for(i=0; i<pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, Wheel((i+j) & 255));
-  }
-  pixels.show();
-  //Serial.print(".");
-  delay(wait);
-  j++;
-  if (j==255){ j=0;}
 
 }
 
 
-// We need to create a fader, 3 colors, 0 - 255 per color, the spectrum looks like this:
-// 0......125 .......255
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-  WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
-    return pixels.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-  }
-  if(WheelPos < 170) {
-    WheelPos -= 85;
-    return pixels.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-  }
-  WheelPos -= 170;
-  return pixels.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-}
+
