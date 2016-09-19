@@ -1,12 +1,24 @@
+/*********************************************************************************************
+ *  Purpose: ESP8266 device which binds to WiFi SSID and presents itself as a mySensor Device
+ *  Current Design: ESP device is designed to ahve two NeoPixel LED strips attached
+ *        Each Strip is explicitly referenced and ahrd coded, this is not OOP unfortunately
+ *        The initial design will focus on controlling one strip, but allow for the easy 
+ *        addition of the second.
+ *  Author: Delwin Best
+ *  Date: 19 September 2016
+ *  
+ *  *****************************************************************************************/
+
+// NEXT STEPS: We want to set device states based on variables, this way we can track and refresh variables 
+//             And seperate the data from the controll functions (good for external triggers).
+
 #include <EEPROM.h>
 #include <SPI.h>
 #include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
 
+// Set SERVER/REPEATER Variables which are consumed by mySensor.h
 #define MY_DEBUG 
 #define MY_BAUD_RATE 9600
-
-// Enables and select radio type (if attached)
-
 
 #define MY_GATEWAY_ESP8266
 #define MY_ESP8266_SSID "arduinowifi"
@@ -20,7 +32,6 @@
 
 #define MY_GATEWAY_MAX_CLIENTS 3
 
-
 #define MY_INCLUSION_MODE_FEATURE
 #define MY_INCLUSION_MODE_DURATION 60 
 #define MY_INCLUSION_MODE_BUTTON_PIN  3 
@@ -28,9 +39,6 @@
 #define MY_DEFAULT_ERR_LED_PIN BUILTIN_LED  // Error led 
 #define MY_DEFAULT_RX_LED_PIN  BUILTIN_LED  // Receive led pin
 #define MY_DEFAULT_TX_LED_PIN  BUILTIN_LED  // the PCB, on board LED
-#define NUMPIXELS 2
-#define LED_PIN D2
-
 
 #if defined(MY_USE_UDP)
   #include <WiFiUDP.h>
@@ -38,29 +46,31 @@
   #include <ESP8266WiFi.h>
 #endif
 
-
-
-
+//This section relates to the 'CHILD' sensors reporting to the repeater, they are presented independently.
 #define CHILD1_ID 1 
 #define EPROM_CHILD1_STATE 1
 #define EPROM_CHILD1_DIMLEVEL 2
 #define EPROM_CHILD1_COLOR 3
+#define STRIP1_NUMPIXELS 2
+#define STRIP1_LEDPIN D2
 
 #define LIGHT_OFF 0
 #define LIGHT_ON 1
 
+
 #include <MySensors.h>
 
+
+int CHILD1_STATE, CHILD1_DIMLEVEL, CHILD_ID;
+int CHILDREN=2;
 int LastLightState=LIGHT_OFF;
 int LastDimValue=100; 
 
 MyMessage rgbMsg(CHILD1_ID, V_RGB);
 MyMessage dimMsg(CHILD1_ID+1, V_PERCENTAGE);
-
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(2, LED_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(2, STRIP1_LEDPIN, NEO_GRB + NEO_KHZ800);
   
 void setup() {
-  
   delay(1000);
   Serial.begin(9600);
   pixels.begin();
@@ -70,9 +80,10 @@ void setup() {
 
 }
 
+// mySensor device presentation configuration
 void presentation() {
   // Present locally attached sensors here
-  present(0, S_ARDUINO_REPEATER_NODE, "ESP8266_lightcontroller", true); //The number 18 signifies S_ARDUINO_REPEATER_NODE
+  present(0, S_ARDUINO_REPEATER_NODE, "ESP8266_lightcontroller", true);
   present(CHILD1_ID, S_RGB_LIGHT, "RGB", true );
   present(CHILD1_ID+1, S_DIMMER, "RGB", true );
   sendSketchInfo("esp8266_lighting", "1.0");
@@ -91,9 +102,9 @@ void loop() {
 
 }
 
+// main receive function for the mySensor receive handling
 void receive(const MyMessage &message)
 {
-
   //Send msg infoprmation
   Serial.print("node-id: ");Serial.println(message.sender);
   Serial.print("destination-id: ");Serial.println(message.destination);
@@ -102,23 +113,20 @@ void receive(const MyMessage &message)
   Serial.print("data: ");Serial.println(message.data);
 
   if ((message.sensor == CHILD1_ID) || (message.sensor == CHILD1_ID+1)){
-  
+    if (message.type == V_LIGHT) {
+      Serial.println( "V_LIGHT command received..." );
+      setBrightness(message.data);
+    }
     if (message.type == V_RGB) {
       Serial.println( "V_RGB command received..." );
       setColor(message.data);
     }
     if (message.type == V_PERCENTAGE) {
       Serial.println( "V_PERCENTAGE command received..." );
-      ledBrightness(message.data);
-    }
-    if (message.type == V_LIGHT) {
-      Serial.println( "V_LIGHT command received..." );
-      ledBrightness(message.data);
+      setBrightness(message.data);
     }
   }
-
 }
-
 
 
 void SendCurrentState2Controller()
@@ -132,9 +140,8 @@ void SendCurrentState2Controller()
 }
 
 
-
 // Custom function to set Brightness
-int ledBrightness(String value) {
+int setBrightness(String value) {
   Serial.print("Setting Brightness to ");
   Serial.println(value);
   uint8_t brightness = value.toInt();

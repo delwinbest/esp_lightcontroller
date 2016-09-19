@@ -20,19 +20,13 @@ System Design
 
 MCU: ESP-8266EX with the Arduino compiler/interface (this is a $%#$@ to get set up on OSX, but easy on Windows, just search for the 'how to's'.
 
-
 WIFI: ESP8266WiFi library included in Platformio configured project directory when selecting the WeMos Mini D1 device
 
-API: HTTP aREST API with opensource sensor protocol (https://github.com/marcoschwartz/aREST).
+API: Opensource mySensor API (https://github.com/mysensors/MySensors).
 
 Installing & Getting Started
 
 Install Arduino App, recommend Windows for this.
-
-Ensure you have the correct Virtual Comm Port driver installed for your boards, I'm using the ch340g chip and driver (http://www.wemos.cc/downloads/).
-
-Install Platformio for your distro.
-
 
 More to come.....
 
