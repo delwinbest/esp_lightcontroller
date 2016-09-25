@@ -12,6 +12,7 @@
 // NEXT STEPS: We want to set device states based on variables, this way we can track and refresh variables 
 //             And seperate the data from the controll functions (good for external triggers).
 
+//ADC_MODE(ADC_TOUT);
 #include <EEPROM.h>
 #include <SPI.h>
 #include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
@@ -19,10 +20,10 @@
 // Set SERVER/REPEATER Variables which are consumed by mySensor.h
 #define MY_DEBUG 
 #define MY_BAUD_RATE 9600
-
+#define ADC_MODE(ADC_TOUT)
 #define MY_GATEWAY_ESP8266
-#define MY_ESP8266_SSID "XXX"
-#define MY_ESP8266_PASSWORD "YYY"
+//#define MY_ESP8266_SSID "XX"
+//#define MY_ESP8266_PASSWORD "YY"
 
 #define MY_ESP8266_HOSTNAME "esp8266_bedroom"
 
@@ -30,7 +31,7 @@
 #define MY_IP_SUBNET_ADDRESS 255,255,255,0
 #define MY_PORT 5003      
 
-#define MY_GATEWAY_MAX_CLIENTS 3
+#define MY_GATEWAY_MAX_CLIENTS 5
 
 //#define MY_INCLUSION_MODE_FEATURE
 #define MY_INCLUSION_MODE_DURATION 60 
@@ -58,28 +59,39 @@
 
 int CHILD1_STATE=1;
 int CHILD_ID;
-int CHILD1_DIMLEVEL=255;
+uint8_t CHILD1_DIMLEVEL=255;
 String CHILD1_COLOR="FFFFFF";
 int CHILDREN=2;
 int LastLightState=LIGHT_OFF;
 int LastDimValue=100; 
 
+int sensorPin = A0;    // select the input pin for the potentiometer
+int sensorValue = 0;  // variable to store the value coming from the sensor
+
+bool toggle = false;
 MyMessage rgbMsg(CHILD1_ID, V_RGB);
 MyMessage dimMsg(CHILD1_ID+1, V_PERCENTAGE);
+MyMessage vlightMsg(CHILD1_ID, V_LIGHT);
+MyMessage vlightMsg1(CHILD1_ID+1, V_LIGHT);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(STRIP1_NUMPIXELS, STRIP1_LEDPIN, NEO_GRB + NEO_KHZ800);
-  
-void setup() {
-  delay(1000);
-  Serial.begin(9600);
-  pixels.begin();
 
-  //request( CHILD1_ID, V_RGB );
-  //request( CHILD1_ID+1, V_PERCENTAGE );
-  restore_Eeprom();
-  updateLEDStrip();
 
-  
+void timer0_ISR (void) {
+  noInterrupts();
+  if (toggle) { digitalWrite(BUILTIN_LED, HIGH); toggle = false;
+  } else { digitalWrite(BUILTIN_LED, LOW); toggle = true;}
+    
+  uint8_t reading = analogRead(A0);
+  //Serial.print("Analogue reading: ");
+  //Serial.println(reading);
+  if(reading>1){
+    handleButton();
+  } 
+  timer0_write(ESP.getCycleCount() + 8000000L); // 80MHz == 1sec
+  interrupts();
+  return;
 }
+
 
 // mySensor device presentation configuration
 void presentation() {
@@ -98,12 +110,69 @@ void presentation() {
   return;  
 }
 
+void setup() {
+  delay(1000);
+  Serial.begin(9600);
+  pinMode(A0, INPUT);
+  pinMode(BUILTIN_LED, OUTPUT);
+  noInterrupts();
+  timer0_isr_init();
+  timer0_attachInterrupt(timer0_ISR);
+  timer0_write(ESP.getCycleCount() + 8000000L); // 80MHz == 1sec
+  interrupts();
 
-void loop() {
-
+  pixels.begin();
+  //request( CHILD1_ID, V_RGB );
+  //request( CHILD1_ID+1, V_PERCENTAGE );
+  restore_Eeprom();
+  updateLEDStrip();
 
   
 }
+
+
+void loop() {
+
+  //Test for Button Press
+ 
+}
+
+void handleButton(){
+  // Remember to ensure the button is pressed for longer than 50ms to avoid debounce
+  //delay(50);
+  if(analogRead(A0)<2){ return;}
+
+  // Right, with each pres, increase the light brightness by 33% (int 85)
+  // If there's a roll over, switch the light off.
+  // If the light is off, switch is on at 33%
+
+  switch (CHILD1_STATE){
+    case 0: {
+      // Switch On
+      CHILD1_STATE=1;
+      CHILD1_DIMLEVEL=85;
+      CHILD1_COLOR="FFFFFF"; 
+      break;
+    }
+    case 1: {
+      CHILD1_DIMLEVEL=CHILD1_DIMLEVEL+85; //Add 33%
+
+      if( CHILD1_DIMLEVEL < 85 ){
+        CHILD1_STATE=0;
+      } 
+      break;
+    }
+    default: 
+      // if nothing else matches, do the default
+      // default is optional
+    break;
+  }
+  updateLEDStrip();
+  delay(500); // Delay between button press
+
+  return;
+}
+
 
 // main receive function for the mySensor receive handling
 void receive(const MyMessage &message)
@@ -128,13 +197,14 @@ void receive(const MyMessage &message)
     if (message.type == V_PERCENTAGE) {
       Serial.println( "V_PERCENTAGE command received..." );
       CHILD1_STATE=1;
-      CHILD1_DIMLEVEL = ((255/100) * atoi(message.data)); // Max is 255, upscale from percentage
+      CHILD1_DIMLEVEL = map(atoi(message.data),0,100,0,255);  // ((255/100) * atoi(message.data)); // Max is 255, upscale from percentage
       updateLEDStrip();
     }
   }
   return;
 }
 
+// Handle the V_Light Command from controller
 void handleVLIGHT(uint8_t CHILD, String data){
   //Doing this for Child 1 for now
   //Extend using CHILD variable
@@ -148,7 +218,7 @@ void handleVLIGHT(uint8_t CHILD, String data){
     }
     case 1:
     {
-      // Switch Off
+      // Switch On
       CHILD1_STATE=1; 
       break;
     }
@@ -163,12 +233,16 @@ void handleVLIGHT(uint8_t CHILD, String data){
   return; 
 }
 
-void SendCurrentState2Controller(){
-  if ((LastLightState==LIGHT_OFF)||(LastDimValue==0)) {
-    send(rgbMsg.set(0));
+void updateController(){
+  if (CHILD1_STATE==LIGHT_OFF) {
+    send(vlightMsg.set(0));
+    send(vlightMsg1.set(0));
   }
   else {
-    send(rgbMsg.set("ffffff"));
+    send(vlightMsg.set(1));
+    send(vlightMsg1.set(1));
+    send(dimMsg.set(CHILD1_DIMLEVEL));
+    send(rgbMsg.set(CHILD1_COLOR));
   }
   return;
 }
@@ -195,6 +269,7 @@ void updateLEDStrip(){
       // default is optional
     break;
   }
+  //updateController();
   return;
 }
 
@@ -226,7 +301,6 @@ void setColor(String value) {
   }
   
   pixels.show();
-  delay(100);
   return;
 }
 
