@@ -17,13 +17,13 @@
 #include <SPI.h>
 #include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
 
+
 // Set SERVER/REPEATER Variables which are consumed by mySensor.h
 #define MY_DEBUG 
 #define MY_BAUD_RATE 9600
-#define ADC_MODE(ADC_TOUT)
 #define MY_GATEWAY_ESP8266
-//#define MY_ESP8266_SSID "XX"
-//#define MY_ESP8266_PASSWORD "YY"
+#define MY_ESP8266_SSID "arduinowifi"
+#define MY_ESP8266_PASSWORD "thereisnospoon"
 
 #define MY_ESP8266_HOSTNAME "esp8266_bedroom"
 
@@ -59,13 +59,14 @@
 
 int CHILD1_STATE=1;
 int CHILD_ID;
-uint8_t CHILD1_DIMLEVEL=255;
+uint8_t CHILD1_DIMLEVEL=255;    //This needs to be an 8 bt int as we're relying on a rollover for brightness controll
 String CHILD1_COLOR="FFFFFF";
 int CHILDREN=2;
 int LastLightState=LIGHT_OFF;
 int LastDimValue=100; 
 
-int sensorPin = A0;    // select the input pin for the potentiometer
+int sensorPin1 = D1;    // select the input pin for the button
+int sensorPin2 = D4;
 int sensorValue = 0;  // variable to store the value coming from the sensor
 
 bool toggle = false;
@@ -75,22 +76,6 @@ MyMessage vlightMsg(CHILD1_ID, V_LIGHT);
 MyMessage vlightMsg1(CHILD1_ID+1, V_LIGHT);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(STRIP1_NUMPIXELS, STRIP1_LEDPIN, NEO_GRB + NEO_KHZ800);
 
-
-void timer0_ISR (void) {
-  noInterrupts();
-  if (toggle) { digitalWrite(BUILTIN_LED, HIGH); toggle = false;
-  } else { digitalWrite(BUILTIN_LED, LOW); toggle = true;}
-    
-  uint8_t reading = analogRead(A0);
-  //Serial.print("Analogue reading: ");
-  //Serial.println(reading);
-  if(reading>1){
-    handleButton();
-  } 
-  timer0_write(ESP.getCycleCount() + 8000000L); // 80MHz == 1sec
-  interrupts();
-  return;
-}
 
 
 // mySensor device presentation configuration
@@ -113,13 +98,7 @@ void presentation() {
 void setup() {
   delay(1000);
   Serial.begin(9600);
-  pinMode(A0, INPUT);
   pinMode(BUILTIN_LED, OUTPUT);
-  noInterrupts();
-  timer0_isr_init();
-  timer0_attachInterrupt(timer0_ISR);
-  timer0_write(ESP.getCycleCount() + 8000000L); // 80MHz == 1sec
-  interrupts();
 
   pixels.begin();
   //request( CHILD1_ID, V_RGB );
@@ -132,15 +111,78 @@ void setup() {
 
 
 void loop() {
+//  Serial.print("Pin1 cycle count: ");
+  int cycles = readCapacitivePin(sensorPin1);
+//  Serial.println(cycles);
+  if(cycles > 0){
+    handleButton(sensorPin1);
+  }
+  delay(100);
 
-  //Test for Button Press
- 
 }
 
-void handleButton(){
-  // Remember to ensure the button is pressed for longer than 50ms to avoid debounce
-  //delay(50);
-  if(analogRead(A0)<2){ return;}
+
+// Capcacitive Touch Detection
+// The theory here is that if you have two pins connected by 800K+ resistor, the one an input and the other an output
+// And you flip the output pin to HIGH, the time it takes the inpput pin to detect this change is dependent on the capacitance present
+// on the the 'wire' ... which changes when you touch it.
+// Routing taken from: https://github.com/juanpintom/Souliss_ESP_Examples/blob/master/E08_ESP_Capacitive_Sensor.ino
+
+uint8_t readCapacitivePin(int pinToMeasure) {
+
+  if (pinToMeasure == sensorPin1){
+    pinMode(sensorPin2, INPUT);
+  } else {
+    pinMode(sensorPin1, INPUT);
+  }
+  
+  pinMode(pinToMeasure, OUTPUT);
+  digitalWrite(pinToMeasure, LOW);
+  delay(1);
+  // Prevent the timer IRQ from disturbing our measurement
+  noInterrupts();
+  // Make the pin an input with the internal pull-up on
+  pinMode(pinToMeasure, INPUT_PULLUP);
+
+  // Now see how long the pin to get pulled up. This manual unrolling of the loop
+  // decreases the number of hardware cycles between each read of the pin,
+  // thus increasing sensitivity.
+  uint8_t cycles = 17;
+       if (digitalRead(pinToMeasure)) { cycles =  0;}
+  else if (digitalRead(pinToMeasure)) { cycles =  1;}
+  else if (digitalRead(pinToMeasure)) { cycles =  2;}
+  else if (digitalRead(pinToMeasure)) { cycles =  3;}
+  else if (digitalRead(pinToMeasure)) { cycles =  4;}
+  else if (digitalRead(pinToMeasure)) { cycles =  5;}
+  else if (digitalRead(pinToMeasure)) { cycles =  6;}
+  else if (digitalRead(pinToMeasure)) { cycles =  7;}
+  else if (digitalRead(pinToMeasure)) { cycles =  8;}
+  else if (digitalRead(pinToMeasure)) { cycles =  9;}
+  else if (digitalRead(pinToMeasure)) { cycles = 10;}
+  else if (digitalRead(pinToMeasure)) { cycles = 11;}
+  else if (digitalRead(pinToMeasure)) { cycles = 12;}
+  else if (digitalRead(pinToMeasure)) { cycles = 13;}
+  else if (digitalRead(pinToMeasure)) { cycles = 14;}
+  else if (digitalRead(pinToMeasure)) { cycles = 15;}
+  else if (digitalRead(pinToMeasure)) { cycles = 16;}
+
+  // End of timing-critical section
+  interrupts();
+
+  // Discharge the pin again by setting it low and output
+  //  It's important to leave the pins low if you want to 
+  //  be able to touch more than 1 sensor at a time - if
+  //  the sensor is left pulled high, when you touch
+  //  two sensors, your body will transfer the charge between
+  //  sensors.
+  digitalWrite(pinToMeasure, LOW);
+  pinMode(pinToMeasure, OUTPUT);
+
+  return cycles;
+}
+
+void handleButton(int pin){
+ 
 
   // Right, with each pres, increase the light brightness by 33% (int 85)
   // If there's a roll over, switch the light off.
@@ -159,6 +201,7 @@ void handleButton(){
 
       if( CHILD1_DIMLEVEL < 85 ){
         CHILD1_STATE=0;
+        CHILD1_DIMLEVEL=1; // IF the 8 bit int rolls over, set it to one to avoid wierd crap
       } 
       break;
     }
@@ -169,40 +212,13 @@ void handleButton(){
   }
   updateLEDStrip();
   delay(500); // Delay between button press
-
+  // Remember to ensure the button press is release to avoid debounce, this will cause problems later if I want to detect 
+  // button hold for dimming
+  while(readCapacitivePin(pin)){};
   return;
 }
 
 
-// main receive function for the mySensor receive handling
-void receive(const MyMessage &message)
-{
-  //Send msg infoprmation
-  Serial.print("node-id: ");Serial.println(message.sender);
-  Serial.print("destination-id: ");Serial.println(message.destination);
-  Serial.print("child-sensor-id: ");Serial.println(message.sensor);
-  Serial.print("message-type: ");Serial.println(message.type);
-  Serial.print("data: ");Serial.println(message.data);
-
-  if ((message.sensor == CHILD1_ID) || (message.sensor == CHILD1_ID+1)){
-    if (message.type == V_LIGHT) {
-      Serial.println( "V_LIGHT command received..." );
-      handleVLIGHT(1, message.data);
-    }
-    if (message.type == V_RGB) {
-      Serial.println( "V_RGB command received..." );
-      CHILD1_COLOR=message.data;
-      setColor(CHILD1_COLOR);   // I still need to stop CHILD1_COLOR in eeprom and change to updateledstrip();
-    }
-    if (message.type == V_PERCENTAGE) {
-      Serial.println( "V_PERCENTAGE command received..." );
-      CHILD1_STATE=1;
-      CHILD1_DIMLEVEL = map(atoi(message.data),0,100,0,255);  // ((255/100) * atoi(message.data)); // Max is 255, upscale from percentage
-      updateLEDStrip();
-    }
-  }
-  return;
-}
 
 // Handle the V_Light Command from controller
 void handleVLIGHT(uint8_t CHILD, String data){
@@ -241,13 +257,15 @@ void updateController(){
   else {
     send(vlightMsg.set(1));
     send(vlightMsg1.set(1));
-    send(dimMsg.set(CHILD1_DIMLEVEL));
+    // We need to convert the DIMLEVEL to a PERCENTAGE for the controller:
+    // Remember this: CHILD1_DIMLEVEL = map(atoi(message.data),0,100,0,255);  // ((255/100) * atoi(message.data)); // Max is 255, upscale from percentage
+    send(dimMsg.set(int(map(CHILD1_DIMLEVEL,0,255,0,100))));
     send(rgbMsg.set(CHILD1_COLOR));
   }
   return;
 }
 
-//
+// Save the LED state data and update the strip, by saving you can restore during reset
 void updateLEDStrip(){
   save_Eeprom();  
   switch (CHILD1_STATE){
@@ -269,17 +287,21 @@ void updateLEDStrip(){
       // default is optional
     break;
   }
-  //updateController();
+  // Always update the controller with the current 'real worls' state
+  updateController();
   return;
 }
 
 // Custom function to set Brightness
+// Remember: the pixel bringhtness range is 0 to 255, 
+// Remember, the controller brightness range is a percentage. ugh
 void setBrightness(uint8_t brightness) {
   Serial.print("Setting Brightness: ");
   Serial.println(String(brightness));
   //Serial.println(value);
   //uint8_t brightness = value.toInt();
   pixels.setBrightness(brightness);
+  delay(50);
   pixels.show();
   delay(100);
   return; 
@@ -320,6 +342,36 @@ void restore_Eeprom(){
   for(int i=0; i<CHILD1_COLOR.length(); i++) { 
     CHILD1_COLOR[i]=loadState(EPROM_CHILD1_COLOR+i);
   }
+}
+
+// main receive function for the mySensor receive handling
+void receive(const MyMessage &message)
+{
+  //Send msg infoprmation
+  Serial.print("node-id: ");Serial.println(message.sender);
+  Serial.print("destination-id: ");Serial.println(message.destination);
+  Serial.print("child-sensor-id: ");Serial.println(message.sensor);
+  Serial.print("message-type: ");Serial.println(message.type);
+  Serial.print("data: ");Serial.println(message.data);
+
+  if ((message.sensor == CHILD1_ID) || (message.sensor == CHILD1_ID+1)){
+    if (message.type == V_LIGHT) {
+      Serial.println( "V_LIGHT command received..." );
+      handleVLIGHT(1, message.data);
+    }
+    if (message.type == V_RGB) {
+      Serial.println( "V_RGB command received..." );
+      CHILD1_COLOR=message.data;
+      setColor(CHILD1_COLOR);   // I still need to stop CHILD1_COLOR in eeprom and change to updateledstrip();
+    }
+    if (message.type == V_PERCENTAGE) {
+      Serial.println( "V_PERCENTAGE command received..." );
+      CHILD1_STATE=1;
+      CHILD1_DIMLEVEL = map(atoi(message.data),0,100,0,255);  // ((255/100) * atoi(message.data)); // Max is 255, upscale from percentage
+      updateLEDStrip();
+    }
+  }
+  return;
 }
 
 
