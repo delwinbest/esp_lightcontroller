@@ -16,24 +16,21 @@
 #include <EEPROM.h>
 #include <SPI.h>
 #include <Adafruit_NeoPixel.h>  //https://github.com/adafruit/Adafruit_NeoPixel
-
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+#include <ArduinoOTA.h>
 
 // Set SERVER/REPEATER Variables which are consumed by mySensor.h
 #define MY_DEBUG 
 #define MY_BAUD_RATE 9600
 #define MY_GATEWAY_ESP8266
-#define MY_ESP8266_SSID "arduinowifi"
-#define MY_ESP8266_PASSWORD "thereisnospoon"
-
-#define MY_ESP8266_HOSTNAME "esp8266_bedroom"
-
+//WiFi config no longer hard coded
+//#define MY_ESP8266_SSID "arduinowifi"         
+//#define MY_ESP8266_PASSWORD "thereisnospoon"
+//#define MY_ESP8266_HOSTNAME "esp8266_bedroom"
 #define MY_IP_GATEWAY_ADDRESS 192,168,1,1
 #define MY_IP_SUBNET_ADDRESS 255,255,255,0
 #define MY_PORT 5003      
-
 #define MY_GATEWAY_MAX_CLIENTS 5
-
-//#define MY_INCLUSION_MODE_FEATURE
 #define MY_INCLUSION_MODE_DURATION 60 
 #define MY_INCLUSION_MODE_BUTTON_PIN  3 
 
@@ -42,7 +39,19 @@
 #define MY_DEFAULT_TX_LED_PIN  BUILTIN_LED  // the PCB, on board LED
 
 #include <ESP8266WiFi.h>
+// mySensor Config done
 
+/**
+ * @brief mDNS and OTA Constants
+ * @{
+ */
+#define HOSTNAME "ESP8266-OTA-" ///< Hostename. The setup function adds the Chip ID at the end.
+/// @}
+
+// Config for WiFi AP if WiFi connection fails:
+const char* ssid = "esp8266e"; 
+const char* passphrase = "esp8266e";
+String st;
 
 //This section relates to the 'CHILD' sensors reporting to the repeater, they are presented independently.
 #define CHILD1_ID 1 
@@ -75,7 +84,14 @@ MyMessage dimMsg(CHILD1_ID+1, V_PERCENTAGE);
 MyMessage vlightMsg(CHILD1_ID, V_LIGHT);
 MyMessage vlightMsg1(CHILD1_ID+1, V_LIGHT);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(STRIP1_NUMPIXELS, STRIP1_LEDPIN, NEO_GRB + NEO_KHZ800);
+WiFiManager wifiManager;
 
+
+// 'before' is executeed before the mySensor library is loaded
+// This allows us to configure HW and Wifi
+void before(){
+  wifiManager.autoConnect();      //Use Wifi Manager. This reads Wifi config from EEPROM, if it connot connect, it starts a softAP with web UI for wifi config
+}
 
 
 // mySensor device presentation configuration
@@ -100,25 +116,33 @@ void setup() {
   Serial.begin(9600);
   pinMode(BUILTIN_LED, OUTPUT);
 
+  // Set Hostname.
+  String hostname(HOSTNAME);
+  hostname += String(ESP.getChipId(), HEX);
+  WiFi.hostname(hostname);
+
   pixels.begin();
   //request( CHILD1_ID, V_RGB );
   //request( CHILD1_ID+1, V_PERCENTAGE );
   restore_Eeprom();
   updateLEDStrip();
 
-  
+    // Start OTA server.
+  ArduinoOTA.setHostname((const char *)hostname.c_str());
+  //ArduinoOTA.setPassword("password");
+  ArduinoOTA.begin();
 }
 
 
 void loop() {
-//  Serial.print("Pin1 cycle count: ");
-  int cycles = readCapacitivePin(sensorPin1);
-//  Serial.println(cycles);
-  if(cycles > 0){
+
+  if(readCapacitivePin(sensorPin1) > 0){
     handleButton(sensorPin1);
   }
   delay(100);
-
+    // Handle OTA server.
+  ArduinoOTA.handle();
+ 
 }
 
 
@@ -240,12 +264,10 @@ void handleVLIGHT(uint8_t CHILD, String data){
     }
     default: 
       // if nothing else matches, do the default
-      // default is optional
     break;
   }
 
   updateLEDStrip();
-  //updateController
   return; 
 }
 
@@ -278,8 +300,8 @@ void updateLEDStrip(){
     case 1:
     {
       pixels.begin();
-      setColor(CHILD1_COLOR);
       setBrightness(CHILD1_DIMLEVEL);
+      setColor(CHILD1_COLOR);
       break;
     }
     default: 
@@ -296,10 +318,6 @@ void updateLEDStrip(){
 // Remember: the pixel bringhtness range is 0 to 255, 
 // Remember, the controller brightness range is a percentage. ugh
 void setBrightness(uint8_t brightness) {
-  Serial.print("Setting Brightness: ");
-  Serial.println(String(brightness));
-  //Serial.println(value);
-  //uint8_t brightness = value.toInt();
   pixels.setBrightness(brightness);
   delay(50);
   pixels.show();
@@ -310,8 +328,8 @@ void setBrightness(uint8_t brightness) {
 // Convert HTML color code into RGB values
 // and set strip
 void setColor(String value) {
-  Serial.print("Setting Color To: ");
-  Serial.println(value);
+//  Serial.print("Setting Color To: ");
+//  Serial.println(value);
   long number = (long) strtol( &value[0], NULL, 16);
   int red = number >> 16;
   int green = number >> 8 & 0xFF;
@@ -320,6 +338,7 @@ void setColor(String value) {
 
   for(i=0; i<pixels.numPixels(); i++) {
     pixels.setPixelColor(i, red, green, blue);
+    delay(50);
   }
   
   pixels.show();
@@ -348,24 +367,25 @@ void restore_Eeprom(){
 void receive(const MyMessage &message)
 {
   //Send msg infoprmation
+  /*
   Serial.print("node-id: ");Serial.println(message.sender);
   Serial.print("destination-id: ");Serial.println(message.destination);
   Serial.print("child-sensor-id: ");Serial.println(message.sensor);
   Serial.print("message-type: ");Serial.println(message.type);
   Serial.print("data: ");Serial.println(message.data);
-
+  */
   if ((message.sensor == CHILD1_ID) || (message.sensor == CHILD1_ID+1)){
     if (message.type == V_LIGHT) {
-      Serial.println( "V_LIGHT command received..." );
+      //Serial.println( "V_LIGHT command received..." );
       handleVLIGHT(1, message.data);
     }
     if (message.type == V_RGB) {
-      Serial.println( "V_RGB command received..." );
+      //Serial.println( "V_RGB command received..." );
       CHILD1_COLOR=message.data;
-      setColor(CHILD1_COLOR);   // I still need to stop CHILD1_COLOR in eeprom and change to updateledstrip();
+      setColor(CHILD1_COLOR);   // I still need to store CHILD1_COLOR in eeprom and change to updateledstrip();
     }
     if (message.type == V_PERCENTAGE) {
-      Serial.println( "V_PERCENTAGE command received..." );
+      //Serial.println( "V_PERCENTAGE command received..." );
       CHILD1_STATE=1;
       CHILD1_DIMLEVEL = map(atoi(message.data),0,100,0,255);  // ((255/100) * atoi(message.data)); // Max is 255, upscale from percentage
       updateLEDStrip();
@@ -373,5 +393,6 @@ void receive(const MyMessage &message)
   }
   return;
 }
+
 
 

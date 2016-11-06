@@ -4,7 +4,7 @@ ESP8266 Open Source Lighting Controller
     :target: https://travis-ci.org/delwinbest/esp_lightcontroller
     :alt: Travis.CI Build Status
 
-Another home automation project using $4 ESP8266 device with Platformio compiler and HTTP aREST interface.
+Another home automation project using $4 ESP8266 device with Arduino compiler and HTTP aREST interface.
 
 Intro
 
@@ -26,7 +26,16 @@ API: Opensource mySensor API (https://github.com/mysensors/MySensors).
 
 Installing & Getting Started
 
-Install Arduino App, recommend Windows for this.
+Install Arduino App and included libraries. The links have been provided.
+
+First Use:
+On first boot, no configuration exists. The module will boot into WifiAP mode and allow you to configure the WiFi settings via http://192.168.4.1.
+After this the chip will reboot and connect to the network.
+
+Controlling and Programming:
+The code allows for 'Over The Air' updates. When running your Arduino application will list a wire arduino Port for programming. Have fun:)
+I use Domoticz for home automation and control. Simply add a mySensor device pointing it to the IP of the module and you're all set!
+
 
 More to come.....
 

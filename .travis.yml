@@ -40,6 +40,7 @@ install:
   - git clone https://github.com/mysensors/MySensors /usr/local/share/arduino/libraries/MySensors
   - git clone https://github.com/esp8266/Arduino /usr/local/share/arduino/libraries/esp8266
   - git clone https://github.com/adafruit/Adafruit_NeoPixel /usr/local/share/arduino/libraries/Adafruit_NeoPixel
+  - git clone https://github.com/tzapu/WiFiManager /usr/local/share/arduino/libraries/WiFiManager
   - arduino --install-boards esp8266:esp8266
   - arduino --board esp8266:esp8266:d1_mini --save-prefs
 #  - arduino --pref "compiler.warning_level=error" --save-prefs
