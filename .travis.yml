@@ -50,7 +50,7 @@ script:
   - "echo $HOME"
   - "ls $PWD"
   - "ls /usr/local/share/arduino/libraries/"
-#  - source $TRAVIS_BUILD_DIR/travis/common.sh
+  - "cp -fr /usr/local/share/arduino/libraries/esp8266/libraries/ESP8266WebServer /usr/local/share/arduino/libraries/"
   - arduino --verify --board ${BOARD} $PWD/*.ino
 
 env:
